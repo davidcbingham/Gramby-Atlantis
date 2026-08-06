@@ -65,14 +65,12 @@ html,body{height:100%;overflow:hidden;background:var(--ink);
 .sheet h2{font-family:"Iowan Old Style","Palatino","Georgia",serif;font-size:20px;margin-bottom:8px}
 .sheet p{font-size:13.5px;opacity:.88;margin-bottom:12px}
 .sheet .grow{flex:1;min-height:0;border:1px solid var(--hair);border-radius:12px;overflow:hidden;position:relative}
-#calmap,#confmap{position:absolute;inset:0}
+#confmap{position:absolute;inset:0}
 .row{display:flex;gap:10px;margin-top:12px}
 .btn{flex:1;padding:14px;border-radius:12px;border:1px solid var(--hair);
   background:transparent;color:var(--paper);font-size:15px;font-weight:600;cursor:pointer}
 .btn.pri{background:var(--survey);border-color:var(--survey);color:#fff}
 .btn:disabled{opacity:.35}
-.step{display:inline-block;background:var(--water);color:#fff;border-radius:6px;
-  padding:2px 8px;font-size:11px;letter-spacing:.1em;margin-bottom:8px;align-self:flex-start}
 .wm{font-family:"Iowan Old Style","Palatino","Georgia",serif;font-size:30px;letter-spacing:.14em;
   text-align:center;margin:6px 0 2px}
 .wm+small{display:block;text-align:center;font-size:11px;letter-spacing:.28em;opacity:.7;margin-bottom:18px}
@@ -98,6 +96,26 @@ input[type=text]{width:100%;padding:14px;border-radius:12px;border:1px solid var
 #bar{height:8px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;margin:14px 0 6px}
 #bar > i{display:block;height:100%;width:0;background:var(--water);transition:width .2s}
 .acc{font-size:11px;opacity:.75;margin-top:6px;min-height:14px}
+
+/* ---- align mode: hand-fit the screenshot over the satellite ---- */
+#alignTouch{position:fixed;inset:0;z-index:1400;display:none;touch-action:none}
+body.aligning #tools,body.aligning #shore{display:none}
+#alignbar{position:fixed;left:0;right:0;bottom:0;z-index:1500;display:none;
+  padding:14px 16px calc(env(safe-area-inset-bottom) + 14px);
+  background:linear-gradient(to top,rgba(14,27,34,.96) 70%,rgba(14,27,34,0))}
+body.aligning #alignbar{display:block}
+#alignbar .lab{display:flex;justify-content:space-between;font-size:10.5px;
+  letter-spacing:.22em;text-transform:uppercase;opacity:.85;margin-bottom:8px}
+.seg{display:flex;border:1px solid var(--hair);border-radius:12px;overflow:hidden;margin-bottom:10px}
+.seg button{flex:1;padding:10px;background:transparent;border:none;color:var(--paper);
+  font-size:13px;font-weight:600;letter-spacing:.04em;cursor:pointer}
+.seg button.on{background:var(--survey);color:#fff}
+#alpha{appearance:none;-webkit-appearance:none;width:100%;height:26px;border-radius:13px;
+  background:linear-gradient(to right,rgba(242,236,221,.15),rgba(242,236,221,.55));outline:none;border:1px solid var(--hair)}
+#alpha::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;
+  background:var(--paper);border:3px solid var(--ink);box-shadow:0 1px 6px rgba(0,0,0,.5)}
+#alpha::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:var(--paper);border:3px solid var(--ink)}
+.rotimg{position:absolute;left:0;top:0;will-change:transform;pointer-events:none}
 
 /* ---- position marker ---- */
 .me{width:18px;height:18px;position:relative}
@@ -137,6 +155,22 @@ input[type=text]{width:100%;padding:14px;border-radius:12px;border:1px solid var
   <div id="status">Setting up…</div>
 </div>
 
+<!-- Align mode: hand-fit the screenshot over the satellite -->
+<div id="alignbar">
+  <div class="lab"><span>Align the old map</span><span>drag · pinch · twist</span></div>
+  <div class="seg">
+    <button id="segImg" class="on">Move old map</button>
+    <button id="segBase">Move satellite</button>
+  </div>
+  <input id="alpha" type="range" min="10" max="100" value="65" aria-label="Old map opacity">
+  <div class="acc" id="alWarn"></div>
+  <div class="row">
+    <button class="btn" id="alCancel">Cancel</button>
+    <button class="btn pri" id="alDone">Pin it</button>
+  </div>
+</div>
+<div id="alignTouch"></div>
+
 <!-- Welcome / first run -->
 <div class="sheet" id="shWelcome">
   <div class="wm">MONARCH</div><small>BENEATH LAKE GRANBY</small>
@@ -156,7 +190,7 @@ input[type=text]{width:100%;padding:14px;border-radius:12px;border:1px solid var
   </div>
   <div class="choice" id="cManual">
     <h3>Use a screenshot <span class="tag alt">Manual</span></h3>
-    <p>Bring your own scan from USGS topoView and align it by tapping two shared landmarks. Use this for a sharper map, an offline‑prepared image, or if the automatic pull can't find one.</p>
+    <p>Bring your own scan from USGS topoView and slide, size, and twist it into place over the satellite by eye. Use this for a sharper map, an offline‑prepared image, or if the automatic pull can't find one.</p>
   </div>
   <div class="row"><button class="btn" id="srcBack">Back</button></div>
 </div>
@@ -178,16 +212,12 @@ input[type=text]{width:100%;padding:14px;border-radius:12px;border:1px solid var
   </div>
 </div>
 
-<!-- Calibration sheet (guided screenshot path) -->
+<!-- Screenshot sheet (manual path) -->
 <div class="sheet" id="shCal">
-  <span class="step" id="calStep">STEP 1 OF 5</span>
-  <h2 id="calTitle">Get the historic map</h2>
-  <p id="calBody" style="display:none"></p>
-  <div id="calStep0Extra">
-    <div class="note">Open topoView already centred on the townsite. In the sidebar, drag the <b>year</b> filter to end before <b>1950</b>, pick a quad, and use the <b>viewer preview</b> — not the raw “Browse” JPEG, which carries a paper border and can sit rotated, breaking alignment. Screenshot it north‑up, then come back and choose it.</div>
-    <div class="row"><button class="btn" id="openTopoView">Open topoView at the townsite ↗</button></div>
-  </div>
-  <div class="grow" id="calMapWrap" style="display:none"><div id="calmap"></div></div>
+  <h2>Get the historic map</h2>
+  <p>Grab a pre‑1950 topo of this valley from USGS topoView, screenshot the mapped area, and bring it back here. Then slide, size, and twist it into place over the satellite view by eye.</p>
+  <div class="note">Open topoView already centred on the townsite. In the sidebar, drag the <b>year</b> filter to end before <b>1950</b>, pick a quad, and use the <b>viewer preview</b> — not the raw “Browse” JPEG, which carries a wide paper border. Crop to just the mapped area. Rotation doesn't matter: you'll twist it straight when you align.</div>
+  <div class="row"><button class="btn" id="openTopoView">Open topoView at the townsite ↗</button></div>
   <div class="row">
     <button class="btn" id="calBack">Back</button>
     <button class="btn pri" id="calNext">Choose image…</button>
@@ -306,6 +336,13 @@ async function loadState(){
   const s=await kvGet('state:v2');
   if(s&&s.source){
     pins=s.pins||[]; mapAccuracyM=s.mapAccuracyM||30;
+    if(s.source.kind==='image'&&s.source.cal){
+      // Migrate a two-point calibration saved by the previous version to a pose.
+      const cal=s.source.cal,w=s.source.w,h=s.source.h;
+      const bb=L.latLngBounds([cal.d,cal.b],[cal.c*h+cal.d,cal.a*w+cal.b]), c=bb.getCenter();
+      s.source={kind:'image',img:s.source.img,w:w,h:h,center:[c.lat,c.lng],
+        mppx:Math.abs(cal.a)*111320*Math.cos(c.lat*Math.PI/180),rot:0,scale:null};
+    }
     await applySource(s.source);
     renderPins();
     status('Old map restored. Drag the waterline <b>down</b> to surface Monarch.');
@@ -330,10 +367,48 @@ function setWL(){ water.style.setProperty('--wl',(+water.value)+'%'); setOverlay
 water.addEventListener('input',setWL);
 
 /* ---------- overlay builders ---------- */
-// Screenshot path: affine bounds from two-point calibration (cal: lon=a*x+b, lat=c*y+d)
-function imageBounds(cal,w,h){
-  const p0=[cal.c*0+cal.d, cal.a*0+cal.b], p1=[cal.c*h+cal.d, cal.a*w+cal.b];
-  return L.latLngBounds(p0,p1);
+// Screenshot path: rotatable ground overlay — pose is centre latlng + metres per
+// image pixel + rotation, so a hand-aligned screenshot can sit at any angle.
+// Pans ride the overlay pane for free; only zoom changes need a reposition.
+function mpspAt(lat,zoom){return 40075016.686*Math.cos(lat*Math.PI/180)/(256*Math.pow(2,zoom));}
+const RotImg=L.Layer.extend({
+  initialize:function(o){L.setOptions(this,o);},
+  onAdd:function(m){
+    this._map=m;
+    const el=document.createElement('img');
+    el.src=this.options.img;el.className='rotimg leaflet-zoom-hide';
+    el.style.width=this.options.w+'px';el.style.height=this.options.h+'px';
+    el.style.opacity=this.options.opacity;
+    this._el=el;m.getPane('overlayPane').appendChild(el);
+    m.on('zoomend viewreset',this._update,this);
+    this._update();
+  },
+  onRemove:function(m){
+    m.off('zoomend viewreset',this._update,this);
+    if(this._el&&this._el.parentNode)this._el.parentNode.removeChild(this._el);
+    this._map=null;
+  },
+  setOpacity:function(o){this.options.opacity=o;if(this._el)this._el.style.opacity=o;return this;},
+  setPose:function(center,mppx,rot){this.options.center=L.latLng(center);this.options.mppx=mppx;this.options.rot=rot;this._update();},
+  _update:function(){
+    if(!this._map||!this._el)return;
+    const o=this.options,c=L.latLng(o.center);
+    const p=this._map.latLngToLayerPoint(c);
+    const k=o.mppx/mpspAt(c.lat,this._map.getZoom());
+    this._el.style.transformOrigin='center center';
+    this._el.style.transform='translate('+(p.x-o.w/2)+'px,'+(p.y-o.h/2)+'px) rotate('+o.rot+'deg) scale('+k+')';
+  }
+});
+// Geographic bounds of a posed image (for fitting the view on restore).
+function poseBounds(s){
+  const c=L.latLng(s.center), rad=s.rot*Math.PI/180, cos=Math.cos(rad), sin=Math.sin(rad);
+  const b=L.latLngBounds([[c.lat,c.lng]]);
+  [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(sc=>{
+    const x=sc[0]*s.w/2*s.mppx, y=sc[1]*s.h/2*s.mppx;      // metres, screen axes (y down)
+    const ex=x*cos-y*sin, ey=x*sin+y*cos;
+    b.extend([c.lat-ey/111320, c.lng+ex/(111320*Math.cos(c.lat*Math.PI/180))]);
+  });
+  return b;
 }
 // Auto path: tile the ArcGIS MapServer `export` op, one Web-Mercator tile at a time.
 const WM=20037508.342789244;
@@ -351,17 +426,17 @@ function autoLayer(service){
     opacity:1-(+water.value/100),attribution:'USGS Historical Topo · NGMDB topoView'});
 }
 
-async function applySource(s){
+async function applySource(s,keepView){
   if(overlay){map.removeLayer(overlay);overlay=null;}
   source=s;
   mapAccuracyM=accuracyForScale(s.scale)||mapAccuracyM;
   if(s.kind==='auto'){
     overlay=autoLayer(s.service).addTo(map);
-    map.setView(TOWN,16);
+    if(!keepView)map.setView(TOWN,16);
   }else if(s.kind==='image'){
-    const b=imageBounds(s.cal,s.w,s.h);
-    overlay=L.imageOverlay(s.img,b,{opacity:1-(+water.value/100),interactive:false}).addTo(map);
-    map.fitBounds(b.pad(-0.2));
+    overlay=new RotImg({img:s.img,w:s.w,h:s.h,center:L.latLng(s.center),mppx:s.mppx,rot:s.rot||0,
+      opacity:1-(+water.value/100)}).addTo(map);
+    if(!keepView)map.fitBounds(poseBounds(s).pad(-0.15));
   }
   setWL(); refreshRing();
 }
@@ -436,74 +511,16 @@ $('autoAccept').onclick=async()=>{
 };
 $('autoReject').onclick=()=>{if(confmap){confmap.remove();confmap=null;}closeSheet('shAuto');startManual();};
 
-/* ---------- MANUAL / guided screenshot path ---------- */
-const STEPS=[
- {t:'Get the historic map', b:'', n:'Choose image…'},
- {t:'Tap landmark A on the old map', b:'Pick something that still exists: a road junction, the Grand Lake shoreline, a river bend, a peak. Precision here = honesty later.', n:'Next'},
- {t:'Now tap that same spot on today’s map', b:'Pan the satellite view and tap exactly where landmark A is in the real world.', n:'Next'},
- {t:'Tap landmark B on the old map', b:'Choose a second landmark far from the first — opposite corner if you can. Distance between anchors is what locks the map down.', n:'Next'},
- {t:'Tap landmark B on today’s map', b:'Same spot, real world. Then the old map settles onto the earth.', n:'Pin the map'}
-];
-let step=0, calmap=null, imgData=null, imgW=0, imgH=0, calMk=[];
-let pA_img=null,pA_geo=null,pB_img=null,pB_geo=null;
+/* ---------- MANUAL / screenshot path: choose an image, then align it by hand ---------- */
+let imgData=null, imgW=0, imgH=0, importWarn=null;
 
-function startManual(){step=0;openSheet('shCal');showStep();}
+function startManual(){openSheet('shCal');}
 $('openTopoView').onclick=()=>window.open(TOPOVIEW,'_blank','noopener');
-
-function showStep(){
-  $('calStep').textContent='STEP '+(step+1)+' OF 5';
-  $('calTitle').textContent=STEPS[step].t;
-  $('calBody').textContent=STEPS[step].b;
-  $('calBody').style.display=STEPS[step].b?'block':'none';
-  $('calNext').textContent=STEPS[step].n;
-  $('calNext').disabled=(step>0);            // re-enabled by a tap on steps 1-4
-  $('calStep0Extra').style.display=step===0?'block':'none';
-  $('calMapWrap').style.display=step===0?'none':'block';
-  if(step>0)buildCalMap();
-}
-function clearCalMap(){if(calmap){calmap.remove();calmap=null;}calMk=[];}
-function buildCalMap(){
-  clearCalMap();
-  const onImg=(step===1||step===3);
-  if(onImg){
-    calmap=L.map('calmap',{crs:L.CRS.Simple,zoomControl:false,attributionControl:false,minZoom:-4});
-    const b=[[0,0],[imgH,imgW]];
-    L.imageOverlay(imgData,b).addTo(calmap);
-    calmap.fitBounds(b);
-  }else{
-    calmap=L.map('calmap',{zoomControl:false,attributionControl:false});
-    L.tileLayer(BASEMAP,{maxZoom:19}).addTo(calmap);
-    calmap.setView(map.getCenter(),Math.max(map.getZoom(),13));
-  }
-  calmap.on('click',e=>{
-    calMk.forEach(m=>calmap.removeLayer(m));calMk=[];
-    calMk.push(L.circleMarker(e.latlng,{radius:9,color:'#E8672B',weight:3,fillOpacity:.25}).addTo(calmap));
-    if(step===1)pA_img=e.latlng; if(step===2)pA_geo=e.latlng;
-    if(step===3)pB_img=e.latlng; if(step===4)pB_geo=e.latlng;
-    $('calNext').disabled=false;
-  });
-}
-$('calBack').onclick=()=>{if(step===0){closeSheet('shCal');clearCalMap();openSheet('shSource');}else{step--;showStep();}};
-$('calNext').onclick=()=>{
-  if(step===0){$('fileIn').click();return;}
-  if(step<4){step++;showStep();return;}
-  const x1=pA_img.lng,y1=pA_img.lat,x2=pB_img.lng,y2=pB_img.lat;
-  if(Math.abs(x2-x1)<imgW*0.1||Math.abs(y2-y1)<imgH*0.1){
-    $('calBody').style.display='block';
-    $('calBody').textContent='Those anchors are too close together — the map can’t lock down. Go back and pick landmark B farther away.';
-    return;
-  }
-  const cal={a:(pB_geo.lng-pA_geo.lng)/(x2-x1), c:(pB_geo.lat-pA_geo.lat)/(y2-y1)};
-  cal.b=pA_geo.lng-cal.a*x1; cal.d=pA_geo.lat-cal.c*y1;
-  closeSheet('shCal');clearCalMap();
-  applySource({kind:'image',img:imgData,w:imgW,h:imgH,cal:cal,scale:null}).then(()=>{
-    mapAccuracyM=30; refreshRing(); saveState();
-    enableWater(true); water.value=25; setWL();
-    status('Old map pinned by hand. Ring shows ±<b>30 m</b> (hand alignment). Drag the waterline down to surface Monarch.');
-  });
-};
+$('calBack').onclick=()=>{closeSheet('shCal');openSheet('shSource');};
+$('calNext').onclick=()=>$('fileIn').click();
 $('fileIn').addEventListener('change',ev=>{
   const f=ev.target.files[0];if(!f)return;
+  ev.target.value='';
   const r=new FileReader();
   r.onload=()=>{
     const img=new Image();
@@ -512,20 +529,17 @@ $('fileIn').addEventListener('change',ev=>{
       const c=document.createElement('canvas');c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);
       const ctx=c.getContext('2d');ctx.drawImage(img,0,0,c.width,c.height);
       imgData=c.toDataURL('image/jpeg',0.82);imgW=c.width;imgH=c.height;
-      const warn=validateImport(ctx,c.width,c.height);
-      step=1;showStep();
-      if(warn){$('calBody').style.display='block';$('calBody').innerHTML='⚠︎ '+warn+' You can continue, but alignment may suffer.';}
+      importWarn=validateImport(ctx,c.width,c.height);
+      startAlign();
     };
     img.src=r.result;
   };
   r.readAsDataURL(f);
 });
-// Cheap import checks: a paper collar shows as a bright, near-uniform border; a
-// strongly non-square aspect ratio hints at a rotated or mis-cropped grab.
+// A paper collar shows as a bright, near-uniform border. (Rotation isn't
+// checked any more — the align step twists the map straight by hand.)
 function validateImport(ctx,w,h){
   try{
-    const ar=w/h;
-    if(ar>2.2||ar<0.45) return 'This image is unusually long and thin — check it isn’t rotated (topo quads sit close to square).';
     const sample=(x,y)=>{const d=ctx.getImageData(x,y,1,1).data;return (d[0]+d[1]+d[2])/3;};
     let border=0,inner=0,nb=0,ni=0;
     for(let i=0;i<20;i++){
@@ -534,10 +548,90 @@ function validateImport(ctx,w,h){
       inner+=sample(fx,Math.floor(h*0.5));ni++;
     }
     if(nb&&ni&&(border/nb)-(inner/ni)>55)
-      return 'Looks like a light paper border (collar) around the map — crop to just the mapped area for a cleaner fit.';
+      return 'Looks like a light paper border around the map — crop it away for a cleaner fit, or align past it.';
   }catch(e){/* getImageData can throw on tainted canvas; skip */}
   return null;
 }
+
+/* ---------- align mode: drag / pinch / twist the old map over the satellite ---------- */
+const AL={layer:null,ptrs:new Map()};
+function clampMppx(v){return Math.min(1000,Math.max(0.02,v));}
+
+function startAlign(){
+  closeSheet('shCal');closeSheet('shSource');
+  if(overlay){map.removeLayer(overlay);overlay=null;}   // cancel restores `source`
+  document.body.classList.add('aligning');
+  const c=map.getCenter();
+  const mppx=((map.getSize().x*0.85)/imgW)*mpspAt(c.lat,map.getZoom());
+  AL.layer=new RotImg({img:imgData,w:imgW,h:imgH,center:c,mppx:mppx,rot:0,
+    opacity:+$('alpha').value/100}).addTo(map);
+  setAlignTarget('img');
+  $('alWarn').textContent=importWarn?('⚠︎ '+importWarn):'';
+}
+function setAlignTarget(t){
+  $('alignTouch').style.display=(t==='img')?'block':'none';
+  $('segImg').classList.toggle('on',t==='img');
+  $('segBase').classList.toggle('on',t!=='img');
+}
+function endAlign(){
+  document.body.classList.remove('aligning');
+  $('alignTouch').style.display='none';
+  AL.ptrs.clear();
+  if(AL.layer){map.removeLayer(AL.layer);AL.layer=null;}
+}
+$('segImg').onclick=()=>setAlignTarget('img');
+$('segBase').onclick=()=>setAlignTarget('base');
+$('alpha').addEventListener('input',()=>{if(AL.layer)AL.layer.setOpacity(+$('alpha').value/100);});
+$('alCancel').onclick=()=>{endAlign();if(source)applySource(source,true);else openSheet('shSource');};
+$('alDone').onclick=async()=>{
+  const o=AL.layer.options, c=L.latLng(o.center);
+  endAlign();
+  await applySource({kind:'image',img:o.img,w:o.w,h:o.h,center:[c.lat,c.lng],
+    mppx:o.mppx,rot:o.rot,scale:null},true);
+  mapAccuracyM=30; refreshRing(); saveState();
+  enableWater(true); water.value=25; setWL();
+  status('Old map pinned by hand. Ring shows ±<b>30 m</b> (hand alignment). Drag the waterline down to surface Monarch.');
+};
+
+// Gestures. #alignTouch sits over the map while "Move old map" is active:
+// one pointer drags; two pointers pinch-scale and twist about their midpoint.
+// Mouse fallback: wheel scales, shift/alt+wheel rotates.
+const at=$('alignTouch');
+at.addEventListener('pointerdown',e=>{
+  at.setPointerCapture(e.pointerId);
+  AL.ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  e.preventDefault();
+});
+at.addEventListener('pointermove',e=>{
+  if(!AL.ptrs.has(e.pointerId)||!AL.layer)return;
+  const prev=AL.ptrs.get(e.pointerId), cur={x:e.clientX,y:e.clientY};
+  const o=AL.layer.options;
+  const cp=map.latLngToContainerPoint(L.latLng(o.center));
+  if(AL.ptrs.size===1){
+    const np=L.point(cp.x+cur.x-prev.x, cp.y+cur.y-prev.y);
+    AL.layer.setPose(map.containerPointToLatLng(np),o.mppx,o.rot);
+  }else if(AL.ptrs.size===2){
+    const ids=[...AL.ptrs.keys()];
+    const other=(ids[0]===e.pointerId)?AL.ptrs.get(ids[1]):AL.ptrs.get(ids[0]);
+    const oldMid={x:(prev.x+other.x)/2,y:(prev.y+other.y)/2};
+    const newMid={x:(cur.x+other.x)/2,y:(cur.y+other.y)/2};
+    const oldV={x:prev.x-other.x,y:prev.y-other.y}, newV={x:cur.x-other.x,y:cur.y-other.y};
+    const s=(Math.hypot(newV.x,newV.y)||1)/(Math.hypot(oldV.x,oldV.y)||1);
+    const dA=(Math.atan2(newV.y,newV.x)-Math.atan2(oldV.y,oldV.x))*180/Math.PI;
+    const rad=dA*Math.PI/180, cos=Math.cos(rad), sin=Math.sin(rad);
+    const vx=cp.x-oldMid.x, vy=cp.y-oldMid.y;
+    const np=L.point(newMid.x+s*(vx*cos-vy*sin), newMid.y+s*(vx*sin+vy*cos));
+    AL.layer.setPose(map.containerPointToLatLng(np),clampMppx(o.mppx*s),o.rot+dA);
+  }
+  AL.ptrs.set(e.pointerId,cur);
+});
+['pointerup','pointercancel'].forEach(t=>at.addEventListener(t,e=>AL.ptrs.delete(e.pointerId)));
+at.addEventListener('wheel',e=>{
+  if(!AL.layer)return;e.preventDefault();
+  const o=AL.layer.options;
+  if(e.altKey||e.shiftKey)AL.layer.setPose(o.center,o.mppx,o.rot+(e.deltaY>0?2:-2));
+  else AL.layer.setPose(o.center,clampMppx(o.mppx*Math.pow(1.0015,-e.deltaY)),o.rot);
+},{passive:false});
 
 /* ---------- live position (permissions primed in context) ---------- */
 function refreshRing(){
