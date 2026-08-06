@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Monarch — beneath Lake Granby</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --ink:#0E1B22;        /* deep lake */
+  --silt:#C9BBA4;       /* exposed lakebed */
+  --water:#3E8E8B;      /* waterline teal */
+  --survey:#E8672B;     /* live position / action */
+  --paper:#F2ECDD;      /* historic map chrome */
+  --hair:rgba(242,236,221,.22);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--ink);
+  font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--paper)}
+#map{position:fixed;inset:0;background:var(--ink)}
+.leaflet-container{background:var(--ink);font:inherit}
+
+/* ---- wordmark ---- */
+#brand{position:fixed;top:calc(env(safe-area-inset-top) + 10px);left:12px;z-index:1000;
+  pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+#brand h1{font-family:"Iowan Old Style","Palatino","Georgia",serif;
+  font-size:22px;font-weight:600;letter-spacing:.12em}
+#brand small{display:block;font-size:10.5px;letter-spacing:.28em;opacity:.85;margin-top:1px}
+
+/* ---- buttons column ---- */
+#tools{position:fixed;right:10px;top:calc(env(safe-area-inset-top) + 10px);z-index:1000;
+  display:flex;flex-direction:column;gap:10px}
+.tbtn{width:46px;height:46px;border-radius:12px;border:1px solid var(--hair);
+  background:rgba(14,27,34,.82);backdrop-filter:blur(8px);color:var(--paper);
+  font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.tbtn:active{transform:scale(.94)}
+.tbtn.on{background:var(--survey);border-color:var(--survey);color:#fff}
+.tbtn:focus-visible{outline:2px solid var(--survey);outline-offset:2px}
+
+/* ---- waterline control ---- */
+#shore{position:fixed;left:0;right:0;bottom:0;z-index:1000;
+  padding:14px 16px calc(env(safe-area-inset-bottom) + 14px);
+  background:linear-gradient(to top,rgba(14,27,34,.95) 60%,rgba(14,27,34,0));}
+#shore .lab{display:flex;justify-content:space-between;font-size:10.5px;
+  letter-spacing:.22em;text-transform:uppercase;opacity:.85;margin-bottom:8px}
+#water{appearance:none;-webkit-appearance:none;width:100%;height:34px;border-radius:17px;
+  background:linear-gradient(to right,var(--silt) 0%,var(--silt) 50%,var(--water) 50%,#1F5B63 100%);
+  background-size:200% 100%;background-position:calc(100% - var(--wl,50%)) 0;outline:none;border:1px solid var(--hair)}
+#water::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;
+  background:var(--paper);border:3px solid var(--ink);box-shadow:0 1px 6px rgba(0,0,0,.5)}
+#status{margin-top:8px;font-size:12px;opacity:.85;min-height:16px}
+#status b{color:var(--survey);font-weight:600}
+
+/* ---- sheets ---- */
+.sheet{position:fixed;inset:0;z-index:2000;background:rgba(14,27,34,.97);display:none;
+  flex-direction:column;padding:calc(env(safe-area-inset-top)+16px) 16px calc(env(safe-area-inset-bottom)+16px)}
+.sheet.open{display:flex}
+.sheet h2{font-family:"Iowan Old Style","Palatino","Georgia",serif;font-size:19px;margin-bottom:6px}
+.sheet p{font-size:13.5px;opacity:.88;margin-bottom:12px}
+.sheet .grow{flex:1;min-height:0;border:1px solid var(--hair);border-radius:12px;overflow:hidden;position:relative}
+#calmap{position:absolute;inset:0}
+.row{display:flex;gap:10px;margin-top:12px}
+.btn{flex:1;padding:14px;border-radius:12px;border:1px solid var(--hair);
+  background:transparent;color:var(--paper);font-size:15px;font-weight:600;cursor:pointer}
+.btn.pri{background:var(--survey);border-color:var(--survey);color:#fff}
+.btn:disabled{opacity:.35}
+.step{display:inline-block;background:var(--water);color:#fff;border-radius:6px;
+  padding:2px 8px;font-size:11px;letter-spacing:.1em;margin-bottom:8px}
+input[type=text]{width:100%;padding:14px;border-radius:12px;border:1px solid var(--hair);
+  background:rgba(255,255,255,.06);color:var(--paper);font-size:16px}
+#pinlist{overflow:auto;flex:1;margin-top:8px}
+.pinrow{padding:12px 4px;border-bottom:1px solid var(--hair);font-size:14px;display:flex;justify-content:space-between;gap:8px}
+.pinrow small{opacity:.6;display:block;font-size:11.5px;margin-top:2px}
+.pinrow button{background:none;border:none;color:var(--survey);font-size:13px;cursor:pointer}
+
+/* ---- position marker ---- */
+.me{width:18px;height:18px;position:relative}
+.me .dot{position:absolute;inset:0;border-radius:50%;background:var(--survey);
+  border:2.5px solid #fff;box-shadow:0 0 10px rgba(232,103,43,.9)}
+.me .hd{position:absolute;left:50%;top:-14px;transform-origin:50% 23px;
+  transform:translateX(-50%) rotate(var(--hdg,0deg));width:0;height:0;
+  border-left:6px solid transparent;border-right:6px solid transparent;
+  border-bottom:12px solid var(--survey);opacity:0;transition:opacity .3s}
+.me.hashdg .hd{opacity:1}
+.findpin{width:14px;height:14px;border-radius:3px;background:var(--paper);
+  border:2px solid var(--ink);transform:rotate(45deg);box-shadow:0 1px 4px rgba(0,0,0,.5)}
+@media (prefers-reduced-motion:no-preference){
+  .me .dot{animation:pulse 2.4s ease-out infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(232,103,43,.55)}70%{box-shadow:0 0 0 16px rgba(232,103,43,0)}100%{box-shadow:0 0 0 0 rgba(232,103,43,0)}}
+}
+.leaflet-control-attribution{background:rgba(14,27,34,.7)!important;color:rgba(242,236,221,.6)!important;font-size:9px!important}
+.leaflet-control-attribution a{color:rgba(242,236,221,.75)!important}
+</style>
+</head>
+<body>
+<div id="map" role="application" aria-label="Map of the Monarch townsite"></div>
+
+<div id="brand"><h1>MONARCH</h1><small>BENEATH LAKE GRANBY</small></div>
+
+<div id="tools">
+  <button class="tbtn" id="bLoc" aria-label="Follow my position">◎</button>
+  <button class="tbtn" id="bCmp" aria-label="Enable compass">➤</button>
+  <button class="tbtn" id="bCal" aria-label="Pin the old map">🗺</button>
+  <button class="tbtn" id="bPins" aria-label="My finds">⚑</button>
+</div>
+
+<div id="shore">
+  <div class="lab"><span>1900s · Lakebed</span><span>Water · Today</span></div>
+  <input id="water" type="range" min="0" max="100" value="55" aria-label="Waterline — reveal the historic map">
+  <div id="status">Load the old map: tap 🗺 to begin.</div>
+</div>
+
+<!-- Calibration sheet -->
+<div class="sheet" id="shCal">
+  <span class="step" id="calStep">STEP 1 OF 5</span>
+  <h2 id="calTitle">Load the historic map</h2>
+  <p id="calBody">Screenshot a pre-1949 topo of this valley from USGS topoView (keep it north-up, don't rotate), then choose it here.</p>
+  <div class="grow"><div id="calmap"></div></div>
+  <div class="row">
+    <button class="btn" id="calBack">Back</button>
+    <button class="btn pri" id="calNext">Choose image…</button>
+  </div>
+  <input type="file" id="fileIn" accept="image/*" hidden>
+</div>
+
+<!-- Pin sheet -->
+<div class="sheet" id="shPin">
+  <h2>Mark a find</h2>
+  <p>Foundation, road cut, timber, stone line — name what you're standing on. Each find is a survey point.</p>
+  <input type="text" id="pinName" placeholder="e.g. Stone foundation, ~4 × 6 m" autocomplete="off">
+  <div class="row">
+    <button class="btn" id="pinCancel">Cancel</button>
+    <button class="btn pri" id="pinSave">Save find</button>
+  </div>
+</div>
+
+<!-- Finds list sheet -->
+<div class="sheet" id="shList">
+  <h2>My finds</h2>
+  <p>Press and hold anywhere on the map to add one. These outlive today's low water.</p>
+  <div id="pinlist"></div>
+  <div class="row">
+    <button class="btn" id="listClose">Close</button>
+    <button class="btn pri" id="listCopy">Copy as JSON</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const status=(msg)=>{$('status').innerHTML=msg};
+
+/* ---------- main map ---------- */
+const TOWN=[40.12417,-105.76278]; // Arapaho Bay — the Monarch townsite per GLAHS
+const map=L.map('map',{zoomControl:false,attributionControl:true}).setView(TOWN,16);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+  maxZoom:19,attribution:'Esri World Imagery · USGS HTMC'
+}).addTo(map);
+
+/* ---------- state ---------- */
+let overlay=null, imgData=null, imgW=0, imgH=0, cal=null; // cal = {a,b,c,d} lon=a*x+b lat=c*y+d
+let pins=[], pinLayer=L.layerGroup().addTo(map), pendingLL=null;
+let watchId=null, follow=false, meMarker=null, accCirc=null, haloCirc=null, hdgDeg=null;
+
+/* ---------- storage (best-effort) ---------- */
+async function loadState(){
+  try{const r=await window.storage.get('monarch:v1');
+    if(r&&r.value){const s=JSON.parse(r.value);
+      imgData=s.img||null; imgW=s.w||0; imgH=s.h||0; cal=s.cal||null; pins=s.pins||[];
+      if(imgData&&cal){applyOverlay(); status('Old map restored. Drag the waterline down.');}
+      renderPins();
+    }
+  }catch(e){/* first run */}
+}
+async function saveState(){
+  try{await window.storage.set('monarch:v1',JSON.stringify({img:imgData,w:imgW,h:imgH,cal,pins}));}
+  catch(e){status('Couldn\u2019t save on this device — your marks live only in this session. Copy JSON before you leave.');}
+}
+
+/* ---------- waterline ---------- */
+const water=$('water');
+function setWL(){
+  const v=+water.value; water.style.setProperty('--wl',v+'%');
+  if(overlay)overlay.setOpacity(1-(v/100));
+}
+water.addEventListener('input',setWL);
+
+/* ---------- overlay from calibration ---------- */
+function bounds(){
+  const p0=[cal.c*0+cal.d, cal.a*0+cal.b], p1=[cal.c*imgH+cal.d, cal.a*imgW+cal.b];
+  return L.latLngBounds(p0,p1);
+}
+function applyOverlay(){
+  if(overlay)map.removeLayer(overlay);
+  overlay=L.imageOverlay(imgData,bounds(),{opacity:1-(+water.value/100),interactive:false}).addTo(map);
+  map.fitBounds(bounds().pad(-0.2));
+}
+
+/* ---------- calibration flow ---------- */
+const sh=$('shCal'), calmapEl=$('calmap');
+let calmap=null, calImgLayer=null, step=0;
+let pA_img=null,pA_geo=null,pB_img=null,pB_geo=null;
+let calMk=[]; // temp markers
+
+const STEPS=[
+ {t:'Load the historic map', b:'Screenshot a pre-1949 topo of this valley from USGS topoView (keep it north-up, don\u2019t rotate), then choose it here.', n:'Choose image\u2026'},
+ {t:'Tap landmark A on the old map', b:'Pick something that still exists: a road junction, the Grand Lake shoreline, a river bend, a peak. Precision here = honesty later.', n:'Next'},
+ {t:'Now tap that same spot on today\u2019s map', b:'Pan the satellite view and tap exactly where landmark A is in the real world.', n:'Next'},
+ {t:'Tap landmark B on the old map', b:'Choose a second landmark far from the first — opposite corner if you can. Distance between anchors is what locks the map down.', n:'Next'},
+ {t:'Tap landmark B on today\u2019s map', b:'Same spot, real world. Then the old map settles onto the earth.', n:'Pin the map'}
+];
+function showStep(){
+  $('calStep').textContent='STEP '+(step+1)+' OF 5';
+  $('calTitle').textContent=STEPS[step].t;
+  $('calBody').textContent=STEPS[step].b;
+  $('calNext').textContent=STEPS[step].n;
+  $('calNext').disabled=(step>0); // re-enabled by a tap
+  buildCalMap();
+}
+function clearCalMap(){if(calmap){calmap.remove();calmap=null;} calMk=[];}
+function buildCalMap(){
+  clearCalMap();
+  if(step===0){calmapEl.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.5;font-size:13px;padding:24px;text-align:center">Your screenshot appears here</div>';return;}
+  calmapEl.innerHTML='';
+  const onImg=(step===1||step===3);
+  if(onImg){
+    calmap=L.map(calmapEl,{crs:L.CRS.Simple,zoomControl:false,attributionControl:false,minZoom:-4});
+    const b=[[0,0],[imgH,imgW]];
+    calImgLayer=L.imageOverlay(imgData,b).addTo(calmap);
+    calmap.fitBounds(b);
+  }else{
+    calmap=L.map(calmapEl,{zoomControl:false,attributionControl:false});
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}).addTo(calmap);
+    calmap.setView(map.getCenter(),Math.max(map.getZoom(),13));
+  }
+  calmap.on('click',e=>{
+    calMk.forEach(m=>calmap.removeLayer(m));calMk=[];
+    calMk.push(L.circleMarker(e.latlng,{radius:9,color:'#E8672B',weight:3,fillOpacity:.25}).addTo(calmap));
+    if(step===1)pA_img=e.latlng; if(step===2)pA_geo=e.latlng;
+    if(step===3)pB_img=e.latlng; if(step===4)pB_geo=e.latlng;
+    $('calNext').disabled=false;
+  });
+}
+$('bCal').onclick=()=>{step=0;sh.classList.add('open');showStep();};
+$('calBack').onclick=()=>{if(step===0){sh.classList.remove('open');clearCalMap();}else{step--;showStep();}};
+$('calNext').onclick=()=>{
+  if(step===0){$('fileIn').click();return;}
+  if(step<4){step++;showStep();return;}
+  // solve: image y in CRS.Simple runs 0(bottom)->imgH(top) via latlng.lat; x via .lng
+  const x1=pA_img.lng,y1=pA_img.lat,x2=pB_img.lng,y2=pB_img.lat;
+  if(Math.abs(x2-x1)<imgW*0.1||Math.abs(y2-y1)<imgH*0.1){
+    $('calBody').textContent='Those anchors are too close together — the map can\u2019t lock down. Go back and pick landmark B farther away.';return;
+  }
+  cal={a:(pB_geo.lng-pA_geo.lng)/(x2-x1), c:(pB_geo.lat-pA_geo.lat)/(y2-y1)};
+  cal.b=pA_geo.lng-cal.a*x1; cal.d=pA_geo.lat-cal.c*y1;
+  sh.classList.remove('open');clearCalMap();
+  applyOverlay();saveState();
+  status('Old map pinned to the earth. Drag the waterline <b>down</b> to surface Monarch.');
+  water.value=25;setWL();
+};
+$('fileIn').addEventListener('change',ev=>{
+  const f=ev.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=2000,sc=Math.min(1,MAX/Math.max(img.width,img.height));
+      const c=document.createElement('canvas');c.width=img.width*sc;c.height=img.height*sc;
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      imgData=c.toDataURL('image/jpeg',0.82);imgW=c.width;imgH=c.height;
+      step=1;showStep();
+    };
+    img.src=r.result;
+  };
+  r.readAsDataURL(f);
+});
+
+/* ---------- live position ---------- */
+function ensureMe(ll,acc){
+  if(!meMarker){
+    meMarker=L.marker(ll,{icon:L.divIcon({className:'',html:'<div class="me"><div class="hd"></div><div class="dot"></div></div>',iconSize:[18,18],iconAnchor:[9,9]}),zIndexOffset:1000}).addTo(map);
+    accCirc=L.circle(ll,{radius:acc,color:'#E8672B',weight:1.5,fillOpacity:.08}).addTo(map);
+    haloCirc=L.circle(ll,{radius:30,color:'#3E8E8B',weight:1.5,dashArray:'6 6',fillOpacity:0}).addTo(map)
+      .bindTooltip('map trust \u00b130 m',{permanent:false,direction:'top'});
+  }
+  meMarker.setLatLng(ll);accCirc.setLatLng(ll).setRadius(acc);haloCirc.setLatLng(ll);
+  const el=meMarker.getElement()?.querySelector('.me');
+  if(el&&hdgDeg!=null){el.classList.add('hashdg');el.style.setProperty('--hdg',hdgDeg+'deg');}
+}
+$('bLoc').onclick=()=>{
+  follow=!follow;$('bLoc').classList.toggle('on',follow);
+  if(follow&&watchId==null){
+    if(!navigator.geolocation){status('This device can\u2019t share its position.');return;}
+    watchId=navigator.geolocation.watchPosition(p=>{
+      const ll=[p.coords.latitude,p.coords.longitude];
+      ensureMe(ll,p.coords.accuracy||15);
+      if(follow)map.panTo(ll,{animate:true});
+      status('GPS \u00b1'+Math.round(p.coords.accuracy||15)+' m · dashed ring = how far the old map itself can drift');
+    },e=>{status('Position unavailable — check location permission for this page.');},
+    {enableHighAccuracy:true,maximumAge:2000,timeout:15000});
+  }
+};
+$('bCmp').onclick=async()=>{
+  const attach=()=>{window.addEventListener('deviceorientation',e=>{
+    if(typeof e.webkitCompassHeading==='number')hdgDeg=e.webkitCompassHeading;
+    else if(e.absolute&&e.alpha!=null)hdgDeg=360-e.alpha;
+    if(meMarker&&hdgDeg!=null){const el=meMarker.getElement()?.querySelector('.me');
+      if(el){el.classList.add('hashdg');el.style.setProperty('--hdg',hdgDeg+'deg');}}
+  });$('bCmp').classList.add('on');};
+  try{
+    if(window.DeviceOrientationEvent&&typeof DeviceOrientationEvent.requestPermission==='function'){
+      const r=await DeviceOrientationEvent.requestPermission();
+      if(r==='granted')attach();else status('Compass permission declined — the dot works fine without it.');
+    }else attach();
+  }catch(e){status('Compass not available here — the dot works fine without it.');}
+};
+
+/* ---------- finds ---------- */
+map.on('contextmenu',e=>{pendingLL=e.latlng;$('pinName').value='';$('shPin').classList.add('open');setTimeout(()=>$('pinName').focus(),50);});
+$('pinCancel').onclick=()=>$('shPin').classList.remove('open');
+$('pinSave').onclick=()=>{
+  if(!pendingLL)return;
+  pins.push({name:$('pinName').value.trim()||'Unnamed find',lat:+pendingLL.lat.toFixed(6),lng:+pendingLL.lng.toFixed(6),t:new Date().toISOString()});
+  $('shPin').classList.remove('open');renderPins();saveState();
+  status('Find saved. '+pins.length+' point'+(pins.length>1?'s':'')+' surveyed.');
+};
+function renderPins(){
+  pinLayer.clearLayers();
+  pins.forEach(p=>L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',html:'<div class="findpin"></div>',iconSize:[14,14],iconAnchor:[7,7]})}).bindPopup('<b>'+p.name+'</b><br>'+p.lat+', '+p.lng).addTo(pinLayer));
+  const el=$('pinlist');el.innerHTML=pins.length?'':'<div style="opacity:.5;padding:24px 4px">Nothing surveyed yet.</div>';
+  pins.forEach((p,i)=>{
+    const d=document.createElement('div');d.className='pinrow';
+    d.innerHTML='<div><b>'+p.name+'</b><small>'+p.lat+', '+p.lng+'</small></div>';
+    const rm=document.createElement('button');rm.textContent='Remove';
+    rm.onclick=()=>{pins.splice(i,1);renderPins();saveState();};
+    d.appendChild(rm);el.appendChild(d);
+  });
+}
+$('bPins').onclick=()=>{renderPins();$('shList').classList.add('open');};
+$('listClose').onclick=()=>$('shList').classList.remove('open');
+$('listCopy').onclick=async()=>{
+  const j=JSON.stringify({site:'Monarch townsite, Lake Granby CO',surveyed:new Date().toISOString(),finds:pins},null,2);
+  try{await navigator.clipboard.writeText(j);status('Survey JSON copied.');}
+  catch(e){prompt('Copy your survey:',j);}
+  $('shList').classList.remove('open');
+};
+
+setWL();loadState();
+})();
+</script>
+</body>
+</html>
